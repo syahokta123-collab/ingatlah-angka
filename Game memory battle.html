@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Battle - Pro Edition</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --primary: #00ffff;
+            --p2-color: #ff0055;
+            --warning: #ccffff; 
+            --panel-bg: rgba(10, 20, 30, 0.95);
+            --bg-overlay-game: rgba(10, 20, 30, 0.8); 
+        }
+
+        body { 
+            font-family: 'Segoe UI', Roboto, sans-serif; 
+            background: #051020 url('bg.jpg') no-repeat center center fixed;
+            background-size: cover;
+            margin: 0; color: white; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; 
+            height: 100vh; width: 100vw; overflow: hidden; 
+        }
+
+        @keyframes cardSlideUp {
+            from { opacity: 0; transform: translateY(200px) scale(0.5); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .card-animate { animation: cardSlideUp 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) both; }
+
+        /* --- UI ELEMENTS --- */
+        .btn-settings-icon { 
+            position: absolute; top: 20px; right: 20px; width: 45px; height: 45px; 
+            background: rgba(0,0,0,0.6); border: 2px solid var(--primary); border-radius: 50%;
+            color: var(--primary); font-size: 20px; cursor: pointer; z-index: 2000;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        #loading-screen, #transition-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #051020 url('bg1.jpg') no-repeat center center;
+            background-size: cover;
+            display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+            padding-bottom: 50px; z-index: 3000;
+        }
+        #transition-overlay { display: none; z-index: 2000; }
+        .loading-wrapper { width: 70%; display: flex; flex-direction: column; align-items: center; }
+        .loading-container { position: relative; width: 100%; height: 8px; background: rgba(0, 255, 255, 0.1); border-radius: 10px; border: 1px solid rgba(0, 255, 255, 0.2); }
+        .loading-progress { width: 0%; height: 100%; background: var(--primary); border-radius: 10px; box-shadow: 0 0 15px var(--primary); }
+        .loading-icon-img { position: absolute; left: 0; bottom: 15px; width: 50px; transform: translateX(-50%); z-index: 3001; }
+        .animate-load { animation: loadProgress 1.5s linear forwards; }
+        .animate-start { animation: loadProgress 5s linear forwards; }
+        @keyframes loadProgress { 0% { width: 0%; } 100% { width: 100%; } }
+
+        /* --- MAIN MENU --- */
+        #main-menu { position: absolute; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; background: transparent; }
+        .mode-selector { display: flex; flex-direction: column; gap: 12px; width: 75%; max-width: 260px; margin-top: 200px; margin-bottom: 25px; } 
+        .mode-option { padding: 15px; border: 2px solid rgba(0,255,255,0.4); border-radius: 15px; cursor: pointer; transition: 0.3s; color: white; font-weight: bold; text-align: center; background: rgba(0, 0, 0, 0.7); }
+        .mode-option.selected { border-color: var(--primary); background: rgba(0, 255, 255, 0.2); box-shadow: 0 0 20px var(--primary); }
+        .battle-type-container { display: flex; gap: 10px; width: 75%; max-width: 260px; margin-bottom: 30px; }
+        .battle-btn { flex: 1; padding: 12px; border: 2px solid var(--primary); border-radius: 12px; background: rgba(0,0,0,0.6); color: white; font-weight: bold; cursor: pointer; }
+        .battle-btn.selected { background: var(--primary); color: black; }
+
+        /* --- GAME AREA --- */
+        #game-area { display: none; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; background: var(--bg-overlay-game); }
+        .scoreboard { display: flex; gap: 15px; width: 90%; justify-content: center; margin-bottom: 25px; }
+        .p-box { flex: 1; padding: 10px; border-radius: 15px; border: 2px solid rgba(255,255,255,0.1); text-align: center; background: rgba(0, 0, 0, 0.6); opacity: 0.4; }
+        #p1-box.active-p { border-color: var(--primary); opacity: 1; transform: scale(1.05); }
+        #p2-box.active-p { border-color: var(--p2-color); opacity: 1; transform: scale(1.05); }
+
+        .grid-container { display: grid; gap: 8px; perspective: 1000px; margin-bottom: 20px; }
+        .card { width: 62px; height: 62px; cursor: pointer; }
+        .card-inner { position: relative; width: 100%; height: 100%; transition: transform 0.5s; transform-style: preserve-3d; }
+        .card.flipped .card-inner { transform: rotateY(180deg); }
+        .card-front, .card-back { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        .card-front { background: rgba(10, 30, 50, 0.9); }
+        .card-back { background: var(--primary); transform: rotateY(180deg); color: #000; }
+
+        .btn-main { padding: 15px 40px; font-size: 1rem; font-weight: bold; background: var(--primary); border: none; border-radius: 30px; cursor: pointer; color: #000; width: 100%; text-transform: uppercase; margin-bottom: 10px; }
+        .input-name { width: 90%; padding: 12px; margin: 10px 0; border-radius: 10px; border: 1px solid var(--primary); background: rgba(0,0,0,0.5); color: white; text-align: center; }
+        
+        /* --- PANEL SETTINGS --- */
+        .settings-panel { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; justify-content: center; align-items: center; z-index: 2500; }
+        .panel-content { background: var(--panel-bg); padding: 25px; border-radius: 20px; width: 85%; max-width: 300px; text-align: center; border: 2px solid var(--primary); }
+        .volume-slider { width: 100%; margin: 15px 0; accent-color: var(--primary); }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body onclick="startMusicOnce()"> 
+    <audio id="bg-music" loop><source src="music.mp3" type="audio/mpeg"></audio>
+
+    <button class="btn-settings-icon" onclick="openSettings()">⚙️</button>
+
+    <div id="loading-screen">
+        <div class="loading-wrapper">
+            <div class="loading-container">
+                <img src="ld.jpg" class="loading-icon-img" id="loading-icon">
+                <div id="start-bar" class="loading-progress animate-start"></div>
+            </div>
+            <p style="margin-top:15px; font-size:10px; letter-spacing:2px;">MEMUAT...</p>
+        </div>
+    </div>
+
+    <div id="transition-overlay">
+        <div class="loading-wrapper">
+            <div class="loading-container">
+                <img src="ld.jpg" class="loading-icon-img" id="trans-icon">
+                <div id="trans-bar" class="loading-progress"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-menu">
+        <div class="mode-selector">
+            <div id="mode-12" class="mode-option selected" onclick="selectMode(12, 4)">NORMAL</div>
+            <div id="mode-16" class="mode-option" onclick="selectMode(16, 4)">HARD</div>
+            <div id="mode-20" class="mode-option" onclick="selectMode(20, 5)">IMPOSSIBLE</div>
+        </div>
+        <div class="battle-type-container">
+            <button id="btn-2p" class="battle-btn selected" onclick="selectBattleType('2p')">2 PLAYER</button>
+            <button id="btn-cpu" class="battle-btn" onclick="selectBattleType('cpu')">VS CPU</button>
+        </div>
+        <div style="width: 200px;"><button class="btn-main" onclick="startGameSequence()">MULAI GAME</button></div>
+    </div>
+
+    <div id="settings-modal" class="settings-panel" onclick="closeSettings()">
+        <div class="panel-content" onclick="event.stopPropagation()">
+            <h3 style="color: var(--primary);">SETTINGS</h3>
+            <button id="btn-mute" class="btn-main" onclick="toggleMute()">MUSIC: ON</button>
+            <label style="font-size: 12px;">VOLUME</label>
+            <input type="range" class="volume-slider" min="0" max="1" step="0.1" value="1" oninput="changeVolume(this.value)">
+            <button class="btn-main" style="background: #ff4444;" onclick="resetWinScore()">RESET KEMENANGAN</button>
+            <button class="btn-main" style="background: #333; color: white;" onclick="backToMenu()">KEMBALI KE MENU</button>
+            <p style="font-size: 10px; color: #888; margin-top: 10px;">Klik di luar untuk menutup</p>
+        </div>
+    </div>
+
+    <div id="name-modal" class="settings-panel">
+        <div class="panel-content">
+            <h3 style="color: var(--primary);">NAMA PLAYER</h3>
+            <input type="text" id="p1-input" class="input-name" placeholder="Nama Player 1" maxlength="10">
+            <input type="text" id="p2-input" class="input-name" placeholder="Nama Player 2" maxlength="10">
+            <button class="btn-main" onclick="saveNamesAndStart()">SIMPAN & MULAI</button>
+        </div>
+    </div>
+
+    <div id="ai-modal" class="settings-panel">
+        <div class="panel-content">
+            <h3 style="color: var(--primary);">LEVEL COMPUTER</h3>
+            <button class="btn-main" onclick="setAiAndStart('normal')">NORMAL</button>
+            <button class="btn-main" onclick="setAiAndStart('medium')">MEDIUM</button>
+            <button class="btn-main" onclick="setAiAndStart('expert')">EXPERT</button>
+            <p style="font-size: 10px; color: #888; cursor:pointer;" onclick="closeAiPanel()">BATAL</p>
+        </div>
+    </div>
+
+    <div id="game-area">
+        <div class="scoreboard">
+            <div id="p1-box" class="p-box active-p">
+                <span id="p1-display-name" style="color:var(--primary); font-weight: bold;">PLAYER 1</span><br>
+                <div id="p1-timer" style="font-family: monospace;">05:00</div>
+                <small>WINS: <span id="p1-wins">0</span></small>
+            </div>
+            <div id="p2-box" class="p-box">
+                <span id="p2-display-name" style="color:var(--p2-color); font-weight: bold;">PLAYER 2</span><br>
+                <div id="p2-timer" style="font-family: monospace;">05:00</div>
+                <small>WINS: <span id="p2-wins">0</span></small>
+            </div>
+        </div>
+        <div id="status" style="color: var(--primary); font-weight: bold; margin-bottom: 15px; font-size: 1rem;">Cari Angka: 1</div>
+        <div id="grid" class="grid-container"></div>
+    </div>
+
+<script>
+    let fixedSequence = [];
+    let nextNumber = 1, isLocked = false, currentPlayer = 1;
+    let currentTotalCards = 12, currentCols = 4;
+    let winHistory = { p1: 0, p2: 0 };
+    const music = document.getElementById('bg-music');
+    let timerInterval, p1Time = 300, p2Time = 300;
+    let musicStarted = false;
+    let gameMode = '2p', cpuLevel = 'normal', aiMemory = {}, playerNames = { p1: "PLAYER 1", p2: "PLAYER 2" };
+
+    window.onload = () => {
+        trackProgress(document.getElementById('start-bar'), document.getElementById('loading-icon'));
+        setTimeout(() => { document.getElementById('loading-screen').style.display = 'none'; }, 3000);
+    };
+
+    function trackProgress(bar, icon) {
+        function frame() {
+            const width = parseFloat(window.getComputedStyle(bar).width);
+            icon.style.left = width + 'px';
+            requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+    }
+
+    function startMusicOnce() { if (!musicStarted) { music.play().then(() => { musicStarted = true; }); } }
+    
+    // --- SETTINGS FUNCTIONS ---
+    function openSettings() { document.getElementById('settings-modal').style.display = 'flex'; }
+    function closeSettings() { document.getElementById('settings-modal').style.display = 'none'; }
+    
+    function toggleMute() {
+        music.muted = !music.muted;
+        document.getElementById('btn-mute').innerText = music.muted ? "MUSIC: OFF" : "MUSIC: ON";
+    }
+    
+    function changeVolume(val) { music.volume = val; }
+    
+    function resetWinScore() {
+        winHistory = { p1: 0, p2: 0 };
+        document.getElementById('p1-wins').innerText = "0";
+        document.getElementById('p2-wins').innerText = "0";
+        alert("Skor Kemenangan Berhasil Dihapus!");
+    }
+
+    function backToMenu() {
+        stopTimer();
+        document.getElementById('game-area').style.display = 'none';
+        document.getElementById('main-menu').classList.remove('hidden');
+        closeSettings();
+    }
+
+    // --- GAME LOGIC ---
+    function selectMode(total, cols) {
+        currentTotalCards = total; currentCols = cols;
+        document.querySelectorAll('.mode-option').forEach(el => el.classList.remove('selected'));
+        document.getElementById(`mode-${total}`).classList.add('selected');
+    }
+
+    function selectBattleType(type) {
+        gameMode = type;
+        document.querySelectorAll('.battle-btn').forEach(btn => btn.classList.remove('selected'));
+        type === '2p' ? document.getElementById('btn-2p').classList.add('selected') : document.getElementById('btn-cpu').classList.add('selected');
+    }
+
+    function startGameSequence() {
+        gameMode === '2p' ? document.getElementById('name-modal').style.display = 'flex' : document.getElementById('ai-modal').style.display = 'flex';
+    }
+
+    function saveNamesAndStart() {
+        const n1 = document.getElementById('p1-input').value;
+        const n2 = document.getElementById('p2-input').value;
+        if(n1) playerNames.p1 = n1.toUpperCase();
+        if(n2) playerNames.p2 = n2.toUpperCase();
+        document.getElementById('p1-display-name').innerText = playerNames.p1;
+        document.getElementById('p2-display-name').innerText = playerNames.p2;
+        document.getElementById('name-modal').style.display = 'none';
+        runTransition('game');
+    }
+
+    function setAiAndStart(level) {
+        cpuLevel = level;
+        document.getElementById('p1-display-name').innerText = playerNames.p1;
+        document.getElementById('p2-display-name').innerText = "CPU (" + level.toUpperCase() + ")";
+        document.getElementById('ai-modal').style.display = 'none';
+        runTransition('game');
+    }
+
+    function closeAiPanel() { document.getElementById('ai-modal').style.display = 'none'; }
+
+    function handleCardClick(card, num) {
+        if (isLocked || card.classList.contains('flipped')) return;
+        card.classList.add('flipped');
+        
+        // AI Memory
+        let chance = (cpuLevel === 'expert') ? 0.85 : (cpuLevel === 'medium' ? 0.55 : 0.25);
+        if (Math.random() < chance) { aiMemory[num] = Array.from(document.querySelectorAll('.card')).indexOf(card); }
+
+        if (num === nextNumber) {
+            nextNumber++;
+            if (nextNumber > currentTotalCards) { stopTimer(); addWin(); }
+            else { 
+                updateStatus((gameMode === 'cpu' && currentPlayer === 2 ? "CPU" : (currentPlayer === 1 ? playerNames.p1 : playerNames.p2)) + " Cari: " + nextNumber);
+                if (gameMode === 'cpu' && currentPlayer === 2) { isLocked = true; setTimeout(cpuMove, 800); }
+            }
+        } else {
+            isLocked = true;
+            card.querySelector('.card-back').style.background = 'var(--p2-color)';
+            setTimeout(() => {
+                document.querySelectorAll('.card').forEach(c => {
+                    c.classList.remove('flipped');
+                    c.querySelector('.card-back').style.background = 'var(--primary)';
+                });
+                switchTurn();
+            }, 1000);
+        }
+    }
+
+    function switchTurn() {
+        document.getElementById(`p${currentPlayer}-box`).classList.remove('active-p');
+        currentPlayer = (currentPlayer === 1) ? 2 : 1;
+        document.getElementById(`p${currentPlayer}-box`).classList.add('active-p');
+        nextNumber = 1; isLocked = false;
+        let name = (gameMode === 'cpu' && currentPlayer === 2) ? "Computer" : (currentPlayer === 1 ? playerNames.p1 : playerNames.p2);
+        updateStatus(`Giliran ${name}!`);
+        if (gameMode === 'cpu' && currentPlayer === 2) { isLocked = true; setTimeout(cpuMove, 1200); }
+    }
+
+    function cpuMove() {
+        if (currentPlayer !== 2 || nextNumber > currentTotalCards) return;
+        let targetIndex = -1;
+        const cards = document.querySelectorAll('.card');
+        if (aiMemory[nextNumber] !== undefined && !cards[aiMemory[nextNumber]].classList.contains('flipped')) {
+            targetIndex = aiMemory[nextNumber];
+        } else {
+            let available = [];
+            cards.forEach((c, idx) => { if (!c.classList.contains('flipped')) available.push(idx); });
+            targetIndex = available[Math.floor(Math.random() * available.length)];
+        }
+        isLocked = false;
+        handleCardClick(cards[targetIndex], fixedSequence[targetIndex]);
+    }
+
+    function renderGrid() {
+        const grid = document.getElementById('grid');
+        grid.innerHTML = '';
+        grid.style.gridTemplateColumns = `repeat(${currentCols}, 1fr)`;
+        fixedSequence.forEach((num, index) => {
+            const card = document.createElement('div');
+            card.className = 'card card-animate';
+            card.style.animationDelay = (index * 0.08) + 's';
+            card.innerHTML = `<div class="card-inner"><div class="card-front"></div><div class="card-back">${num}</div></div>`;
+            card.onclick = () => handleCardClick(card, num);
+            grid.appendChild(card);
+        });
+    }
+
+    function runTransition(target) {
+        startMusicOnce();
+        const overlay = document.getElementById('transition-overlay');
+        const bar = document.getElementById('trans-bar');
+        overlay.style.display = 'flex';
+        bar.classList.add('animate-load');
+        trackProgress(bar, document.getElementById('trans-icon'));
+        setTimeout(() => {
+            overlay.style.display = 'none';
+            bar.classList.remove('animate-load');
+            if(target === 'game') {
+                document.getElementById('main-menu').classList.add('hidden');
+                document.getElementById('game-area').style.display = 'flex';
+                resetGameState(false);
+            }
+        }, 1500);
+    }
+
+    function resetGameState(fullReset) {
+        stopTimer(); nextNumber = 1; isLocked = false; p1Time = 300; p2Time = 300; aiMemory = {};
+        if(fullReset) { winHistory = { p1: 0, p2: 0 }; currentPlayer = 1; }
+        fixedSequence = Array.from({length: currentTotalCards}, (_, i) => i + 1).sort(() => Math.random() - 0.5);
+        renderGrid();
+        updateStatus(`Giliran ${currentPlayer === 1 ? playerNames.p1 : playerNames.p2}, Cari: 1`);
+        startTimer();
+    }
+
+    function startTimer() {
+        stopTimer();
+        timerInterval = setInterval(() => {
+            if (currentPlayer === 1) { p1Time--; updateT(1, p1Time); if(p1Time<=0) endGame(playerNames.p2 + " MENANG"); }
+            else { p2Time--; updateT(2, p2Time); if(p2Time<=0) endGame(playerNames.p1 + " MENANG"); }
+        }, 1000);
+    }
+    function stopTimer() { clearInterval(timerInterval); }
+    function updateT(p, t) {
+        let m = Math.floor(t / 60), s = t % 60;
+        document.getElementById(`p${p}-timer`).innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+    function addWin() {
+        currentPlayer === 1 ? winHistory.p1++ : winHistory.p2++;
+        document.getElementById('p1-wins').innerText = winHistory.p1;
+        document.getElementById('p2-wins').innerText = winHistory.p2;
+        confetti({ particleCount: 150, spread: 70 });
+        setTimeout(() => resetGameState(false), 2000);
+    }
+    function endGame(m) { alert(m); resetGameState(false); }
+    function updateStatus(text) {
+        const el = document.getElementById('status');
+        el.innerText = text;
+        el.style.color = (currentPlayer === 1) ? 'var(--primary)' : 'var(--p2-color)';
+    }
+</script>
+</body>
+</html>
